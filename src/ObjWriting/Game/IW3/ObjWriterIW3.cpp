@@ -9,6 +9,7 @@
 #include "Game/IW3/XModel/XModelDumperIW3.h"
 #include "LightDef/LightDefDumperIW3.h"
 #include "Localize/LocalizeDumperIW3.h"
+#include "Maps/D3DBspDumperIW3.h"
 #include "Material/MaterialGdtDumperIW3.h"
 #include "Menu/MenuDumperIW3.h"
 #include "Menu/MenuListDumperIW3.h"
@@ -48,7 +49,7 @@ void ObjWriter::RegisterAssetDumpers(AssetDumpingContext& context)
     // REGISTER_DUMPER(AssetDumperGameWorldSp)
     // REGISTER_DUMPER(AssetDumperGameWorldMp)
     RegisterAssetDumper(std::make_unique<map_ents::DumperIW3>());
-    // REGISTER_DUMPER(AssetDumperGfxWorld)
+    RegisterAssetDumper(std::make_unique<map_d3dbsp::DumperIW3>());
     RegisterAssetDumper(std::make_unique<light_def::DumperIW3>());
     RegisterAssetDumper(std::make_unique<font::JsonDumperIW3>());
     RegisterAssetDumper(std::make_unique<menu::MenuListDumperIW3>());
