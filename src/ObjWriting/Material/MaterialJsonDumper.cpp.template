@@ -375,6 +375,12 @@ namespace material
 
     void CLASS_NAME::DumpAsset(AssetDumpingContext& context, const XAssetInfo<AssetMaterial::Type>& asset)
     {
+#if defined(FEATURE_IW3)
+        // Only dump json when no gdt available
+        if (context.m_gdt)
+            return;
+#endif
+
         const auto assetFile = context.OpenAssetFile(GetFileNameForAssetName(asset.m_name));
 
         if (!assetFile)
