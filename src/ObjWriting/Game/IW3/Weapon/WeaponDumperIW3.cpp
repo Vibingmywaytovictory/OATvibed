@@ -256,6 +256,25 @@ namespace
     }
 } // namespace
 
+namespace
+{
+    const char* GdfFilenameForWeapon(const WeaponDef& weapon)
+    {
+        switch (weapon.weapType)
+        {
+        case WEAPTYPE_GRENADE:
+            return GDF_FILENAME_WEAPON_GRENADE;
+        case WEAPTYPE_PROJECTILE:
+            return GDF_FILENAME_WEAPON_PROJECTILE;
+        case WEAPTYPE_BULLET:
+        case WEAPTYPE_BINOCULARS:
+        default:
+            // Binoculars are authored as a bullet weapon, binoculars_mp of the stock weaponsettings gdt included
+            return GDF_FILENAME_WEAPON_BULLET;
+        }
+    }
+} // namespace
+
 namespace weapon
 {
     void DumperIW3::DumpAsset(AssetDumpingContext& context, const XAssetInfo<AssetWeapon::Type>& asset)
@@ -264,7 +283,7 @@ namespace weapon
         if (context.m_gdt)
         {
             const auto infoString = CreateInfoString(asset);
-            GdtEntry gdtEntry(asset.m_name, GDF_FILENAME_WEAPON);
+            GdtEntry gdtEntry(asset.m_name, GdfFilenameForWeapon(*asset.Asset()));
             infoString.ToGdtProperties(INFO_STRING_PREFIX_WEAPON, gdtEntry);
             context.m_gdt->WriteEntry(gdtEntry);
         }

@@ -244,8 +244,9 @@ namespace
                     auto gdt = std::make_unique<GdtOutputStream>(gdtStream);
                     gdt->BeginStream();
 
-                    const auto* game = IGame::GetGameById(zone.m_game_id);
-                    gdt->WriteVersion(GdtVersion(game->GetShortName(), 1));
+                    // No version entry: AssetManager resolves every entry against a gdf of the same name and there is
+                    // no version.gdf, so it would reject the file. Reading a gdt without one is fine, the version is
+                    // optional to GdtReader and nothing consumes it.
 
                     context.m_gdt = std::move(gdt);
                 }

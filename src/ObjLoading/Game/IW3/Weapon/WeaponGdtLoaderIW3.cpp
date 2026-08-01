@@ -24,7 +24,15 @@ namespace
 
         AssetCreationResult CreateAsset(const std::string& assetName, AssetCreationContext& context) override
         {
-            const auto* gdtEntry = m_gdt.GetGdtEntryByGdfAndName(GDF_FILENAME_WEAPON, assetName);
+            // CoD4 splits weapons over one gdf per weapType, so the entry may live in any of them
+            const GdtEntry* gdtEntry = nullptr;
+            for (const auto* gdfName : {GDF_FILENAME_WEAPON_BULLET, GDF_FILENAME_WEAPON_GRENADE, GDF_FILENAME_WEAPON_PROJECTILE})
+            {
+                gdtEntry = m_gdt.GetGdtEntryByGdfAndName(gdfName, assetName);
+                if (gdtEntry)
+                    break;
+            }
+
             if (gdtEntry == nullptr)
                 return AssetCreationResult::NoAction();
 
