@@ -6,6 +6,7 @@
 #set COMMON_HEADER "\"Game/" + GAME + "/Common" + GAME + ".h\""
 #set JSON_HEADER "\"Game/" + GAME + "/XModel/JsonXModel" + GAME + ".h\""
 #set CONVERTER_HEADER "\"Game/" + GAME + "/XModel/XModelToCommonConverter" + GAME + ".h\""
+#set OBJ_CONSTANTS_HEADER "\"Game/" + GAME + "/ObjConstants" + GAME + ".h\""
 
 #if GAME == "IW3"
 #define FEATURE_IW3
@@ -39,7 +40,9 @@
 #include COMMON_HEADER
 #include JSON_HEADER
 #include CONVERTER_HEADER
+#include OBJ_CONSTANTS_HEADER
 
+#include "Obj/Gdt/GdtEntry.h"
 #include "ObjWriting.h"
 #include "Utils/DistinctMapper.h"
 #include "Utils/QuatInt16.h"
@@ -53,6 +56,8 @@
 
 #include <cassert>
 #include <format>
+#include <string>
+#include <type_traits>
 
 using namespace GAME;
 
@@ -435,6 +440,94 @@ namespace
 
         *assetFile << std::setw(4) << jRoot << "\n";
     }
+
+#if defined(FEATURE_IW3)
+    // The xmodel.gdf enum, in engine lod order. Index 0 means the model has no collision lod.
+    inline const char* GDT_COLLISION_LOD_NAMES[]{"None", "High", "Medium", "Low", "Lowest"};
+
+    // xmodel.gdf offers a slot per lod rather than a list. It stops at four, which is also the engine maximum.
+    inline const char* GDT_LOD_FILE_KEYS[]{"filename", "mediumLod", "lowLod", "lowestLod"};
+    inline const char* GDT_LOD_DIST_KEYS[]{"highLodDist", "mediumLodDist", "lowLodDist", "lowestLodDist"};
+
+    const char* GetGdtType(const XModel& model)
+    {
+        switch (GetType(model))
+        {
+        case JsonXModelType::VIEWHANDS:
+            return "viewhands";
+        case JsonXModelType::ANIMATED:
+            return "animated";
+        case JsonXModelType::RIGID:
+        default:
+            return "rigid";
+        }
+    }
+
+    const char* GetGdtCollisionLod(const XModel& model)
+    {
+        // collLod is a lod index, the gdf enum has a leading "None" entry
+        const auto enumIndex = static_cast<size_t>(model.collLod) + 1u;
+        if (model.collLod < 0 || enumIndex >= std::extent_v<decltype(GDT_COLLISION_LOD_NAMES)>)
+            return GDT_COLLISION_LOD_NAMES[0];
+
+        return GDT_COLLISION_LOD_NAMES[enumIndex];
+    }
+
+    // AssetManager does not accept scientific notation, which is what the default float formatting produces for lod distances
+    std::string GdtFloat(const float value)
+    {
+        auto str = std::format("{:f}", value);
+
+        const auto lastNonZero = str.find_last_not_of('0');
+        if (lastNonZero != std::string::npos && str.find('.') != std::string::npos)
+            str.erase(str[lastNonZero] == '.' ? lastNonZero : lastNonZero + 1);
+
+        return str;
+    }
+
+    void DumpXModelGdt(const AssetDumpingContext& context, const XAssetInfo<XModel>& asset)
+    {
+        const auto& model = *asset.Asset();
+        const auto* modelName = AssetName(model.name);
+
+        GdtEntry gdtEntry(modelName, GDF_FILENAME_XMODEL);
+        gdtEntry.m_properties.emplace("type", GetGdtType(model));
+
+        static constexpr auto MAX_GDT_LOD_COUNT = std::extent_v<decltype(GDT_LOD_FILE_KEYS)>;
+        const auto* extension = GetExtensionForModelByConfig();
+        for (auto lodNumber = 0u; lodNumber < MAX_GDT_LOD_COUNT; lodNumber++)
+        {
+            const auto hasLod = lodNumber < model.numLods;
+
+            // Paths in the gdf are relative to model_export, which is where the lods are dumped to
+            gdtEntry.m_properties.emplace(GDT_LOD_FILE_KEYS[lodNumber],
+                                          hasLod ? std::format("{}_lod{}{}", modelName, lodNumber, extension) : std::string());
+            gdtEntry.m_properties.emplace(GDT_LOD_DIST_KEYS[lodNumber], GdtFloat(hasLod ? model.lodInfo[lodNumber].dist : 0.0f));
+        }
+
+        gdtEntry.m_properties.emplace("collisionLOD", GetGdtCollisionLod(model));
+        gdtEntry.m_properties.emplace("physicsPreset", model.physPreset && model.physPreset->name ? AssetName(model.physPreset->name) : "");
+
+        // Not recoverable from the compiled asset. AssetManager expects the full field set, so write the gdf defaults.
+        for (const auto* defaultZeroField : {"forceMediumLodRigid",
+                                             "forceLowLodRigid",
+                                             "forceLowestLodRigid",
+                                             "groundLit",
+                                             "noRadialNormals",
+                                             "radialOriginX",
+                                             "radialOriginY",
+                                             "radialOriginZ",
+                                             "allowHidingAllParts"})
+        {
+            gdtEntry.m_properties.emplace(defaultZeroField, "0");
+        }
+
+        for (const auto* defaultEmptyField : {"hitBoxModel", "skinOverride", "boneControllers", "boneStabilizers"})
+            gdtEntry.m_properties.emplace(defaultEmptyField, "");
+
+        context.m_gdt->WriteEntry(gdtEntry);
+    }
+#endif
 } // namespace
 
 #set CLASS_NAME "Dumper" + GAME
@@ -443,7 +536,16 @@ namespace xmodel
 {
     void CLASS_NAME::DumpAsset(AssetDumpingContext& context, const XAssetInfo<AssetXModel::Type>& asset)
     {
+#if defined(FEATURE_IW3)
+        // Only dump json when no gdt available
+        if (context.m_gdt)
+            DumpXModelGdt(context, asset);
+        else
+            DumpXModelJson(context, asset);
+#else
         DumpXModelJson(context, asset);
+#endif
+
         DumpXModelSurfs(context, asset);
     }
 }
