@@ -1,7 +1,7 @@
 #include "MaterialGdtDumperIW3.h"
 
-#include "Game/IW3/MaterialConstantsIW3.h"
 #include "Game/IW3/Material/MaterialConstantZoneStateIW3.h"
+#include "Game/IW3/MaterialConstantsIW3.h"
 #include "Game/IW3/ObjConstantsIW3.h"
 #include "Game/IW3/Techset/TechsetConstantsIW3.h"
 #include "ObjWriting.h"
@@ -197,8 +197,7 @@ namespace
             SetValue("destCustomBlendFuncAlpha", NameForIndex(GdtCustomBlendFuncNames, bits.dstBlendAlpha));
 
             // The gdf only knows the disabled and the GE128 case
-            SetValue("alphaTest",
-                     !bits.alphaTestDisabled && bits.alphaTest == GFXS_ALPHA_TEST_GE_128 ? GDT_ALPHA_TEST_GE128 : GDT_ALPHA_TEST_ALWAYS);
+            SetValue("alphaTest", !bits.alphaTestDisabled && bits.alphaTest == GFXS_ALPHA_TEST_GE_128 ? GDT_ALPHA_TEST_GE128 : GDT_ALPHA_TEST_ALWAYS);
 
             if (bits.depthTestDisabled)
             {
