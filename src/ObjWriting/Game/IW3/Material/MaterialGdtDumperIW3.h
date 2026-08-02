@@ -7,6 +7,9 @@ namespace material
 {
     class GdtDumperIW3 final : public AbstractAssetDumper<IW3::AssetMaterial>
     {
+    public:
+        void Dump(AssetDumpingContext& context) override;
+
     protected:
         void DumpAsset(AssetDumpingContext& context, const XAssetInfo<IW3::AssetMaterial::Type>& asset) override;
     };

@@ -42,6 +42,7 @@
 #include CONVERTER_HEADER
 #include OBJ_CONSTANTS_HEADER
 
+#include "Material/MaterialGdtZoneState.h"
 #include "Obj/Gdt/GdtEntry.h"
 #include "ObjWriting.h"
 #include "Utils/DistinctMapper.h"
@@ -485,6 +486,31 @@ namespace
         return str;
     }
 
+    // AssetManager cannot convert an xmodel whose materials are missing, and it aborts the whole pass when that
+    // happens, so a model referencing a material that was left out of the gdt has to be left out as well.
+    bool HasAllMaterialsInGdt(AssetDumpingContext& context, const XModel& model)
+    {
+        if (!model.materialHandles)
+            return true;
+
+        const auto* gdtMaterials = context.GetZoneAssetDumperState<material::GdtMaterials>();
+        for (auto i = 0u; i < model.numsurfs; i++)
+        {
+            const auto* materialHandle = model.materialHandles[i];
+            if (!materialHandle || !materialHandle->info.name)
+                continue;
+
+            const auto* materialName = AssetName(materialHandle->info.name);
+            if (!gdtMaterials->Contains(materialName))
+            {
+                con::warn(R"(Skipping xmodel "{}" in gdt: material "{}" is not in the gdt)", model.name, materialName);
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     void DumpXModelGdt(const AssetDumpingContext& context, const XAssetInfo<XModel>& asset)
     {
         const auto& model = *asset.Asset();
@@ -539,7 +565,12 @@ namespace xmodel
 #if defined(FEATURE_IW3)
         // Only dump json when no gdt available
         if (context.m_gdt)
+        {
+            if (!HasAllMaterialsInGdt(context, *asset.Asset()))
+                return;
+
             DumpXModelGdt(context, asset);
+        }
         else
             DumpXModelJson(context, asset);
 #else

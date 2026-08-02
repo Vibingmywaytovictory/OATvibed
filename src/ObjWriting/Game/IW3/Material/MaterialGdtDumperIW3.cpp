@@ -4,7 +4,10 @@
 #include "Game/IW3/MaterialConstantsIW3.h"
 #include "Game/IW3/ObjConstantsIW3.h"
 #include "Game/IW3/Techset/TechsetConstantsIW3.h"
+#include "Image/ImageCommon.h"
+#include "Material/MaterialGdtZoneState.h"
 #include "ObjWriting.h"
+#include "SearchPath/ISearchPath.h"
 #include "Utils/Logging/Log.h"
 
 #include <format>
@@ -36,11 +39,45 @@ namespace
     class MaterialGdtDumper
     {
     public:
-        MaterialGdtDumper(const Material& material, const MaterialConstantZoneState& constants)
+        MaterialGdtDumper(const Material& material, const MaterialConstantZoneState& constants, ISearchPath& searchPath)
             : m_material(material),
               m_constants(constants),
+              m_search_path(searchPath),
               m_entry(AssetName(material.info.name), GDF_FILENAME_MATERIAL)
         {
+        }
+
+        // A gdt entry that cannot convert aborts the whole "build all" pass of AssetManager, so a material whose
+        // source images are not part of this fastfile is better left out than written and known to fail.
+        [[nodiscard]] bool CanConvert(std::string& reason)
+        {
+            if (!m_material.textureTable || m_material.textureCount == 0)
+                return true;
+
+            for (auto i = 0u; i < m_material.textureCount; i++)
+            {
+                const auto& textureDef = m_material.textureTable[i];
+
+                std::string samplerName;
+                if (!m_constants.GetTextureDefName(textureDef.nameHash, samplerName) || !gdtMaterialTextureMaps.contains(samplerName))
+                    continue;
+
+                if (!textureDef.u.image || !textureDef.u.image->name)
+                    continue;
+
+                const auto* imageName = AssetName(textureDef.u.image->name);
+                if (imageName[0] == '~')
+                    continue;
+
+                // The dumped image comes from an iwi of the search path, not from the fastfile itself
+                if (!m_search_path.Open(image::GetFileNameForAsset(imageName, ".iwi")).IsOpen())
+                {
+                    reason = std::format("image \"{}\" is not part of this fastfile", imageName);
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         GdtEntry CreateGdtEntry()
@@ -49,8 +86,11 @@ namespace
             for (const auto& [key, value] : gdtMaterialDefaults)
                 m_entry.m_properties[key] = value;
 
+            const auto materialType = DetermineMaterialType();
+            m_is_phong = materialType == GdtMaterialType_e::WORLD_PHONG || materialType == GdtMaterialType_e::MODEL_PHONG;
+
             SetValue("template", GDT_MATERIAL_TEMPLATE);
-            SetValue("materialType", GdtMaterialTypeNames[static_cast<size_t>(DetermineMaterialType())]);
+            SetValue("materialType", GdtMaterialTypeNames[static_cast<size_t>(materialType)]);
             SetValue("usage", GDT_USAGE_NOT_IN_EDITOR);
             SetValue("sort", GDT_SORT_DEFAULT);
             SetValue("surfaceType", DetermineSurfaceType());
@@ -137,8 +177,12 @@ namespace
 
             if (bits.blendOpRgb == GFXS_BLENDOP_ADD)
             {
-                if (bits.srcBlendRgb == GFXS_BLEND_SRCALPHA && bits.dstBlendRgb == GFXS_BLEND_INVSRCALPHA)
+                // The lit technique of a blended material premultiplies alpha in the shader and so uses One instead
+                // of SrcAlpha, but both come from the same authored blendFunc
+                if ((bits.srcBlendRgb == GFXS_BLEND_SRCALPHA || bits.srcBlendRgb == GFXS_BLEND_ONE) && bits.dstBlendRgb == GFXS_BLEND_INVSRCALPHA)
+                {
                     return GdtBlendFuncNames[static_cast<size_t>(GdtBlendFunc_e::BLEND)];
+                }
                 if (bits.srcBlendRgb == GFXS_BLEND_ONE && bits.dstBlendRgb == GFXS_BLEND_ONE)
                     return GdtBlendFuncNames[static_cast<size_t>(GdtBlendFunc_e::ADD)];
                 if (bits.srcBlendRgb == GFXS_BLEND_ZERO && bits.dstBlendRgb == GFXS_BLEND_SRCCOLOR)
@@ -184,6 +228,7 @@ namespace
             const auto& bits = m_material.stateBitsTable[stateBitsIndex].loadBits.structured;
 
             const auto* blendFuncName = GetBlendFuncName(bits);
+            m_is_additive = blendFuncName == GdtBlendFuncNames[static_cast<size_t>(GdtBlendFunc_e::ADD)];
             SetValue("blendFunc", blendFuncName);
             if (blendFuncName == GdtBlendFuncNames[static_cast<size_t>(GdtBlendFunc_e::CUSTOM)])
             {
@@ -196,8 +241,10 @@ namespace
             SetValue("srcCustomBlendFuncAlpha", NameForIndex(GdtCustomBlendFuncNames, bits.srcBlendAlpha));
             SetValue("destCustomBlendFuncAlpha", NameForIndex(GdtCustomBlendFuncNames, bits.dstBlendAlpha));
 
-            // The gdf only knows the disabled and the GE128 case
-            SetValue("alphaTest", !bits.alphaTestDisabled && bits.alphaTest == GFXS_ALPHA_TEST_GE_128 ? GDT_ALPHA_TEST_GE128 : GDT_ALPHA_TEST_ALWAYS);
+            // "Always" is the no alpha test case, so every enabled variant has to map onto the single GE128 the gdf
+            // offers. Emitting Always for an enabled test would both lose the test and, together with a Custom
+            // blendFunc, be rejected outright ("not supported for phong materials").
+            SetValue("alphaTest", bits.alphaTestDisabled ? GDT_ALPHA_TEST_ALWAYS : GDT_ALPHA_TEST_GE128);
 
             if (bits.depthTestDisabled)
             {
@@ -282,6 +329,10 @@ namespace
                 if (knownMap == gdtMaterialTextureMaps.end())
                     continue;
 
+                // AssetManager rejects the combination outright: "detail map not allowed on additive phong materials"
+                if (m_is_additive && m_is_phong && samplerName == "detailMap")
+                    continue;
+
                 if (!textureDef.u.image || !textureDef.u.image->name)
                     continue;
 
@@ -309,19 +360,40 @@ namespace
 
         const Material& m_material;
         const MaterialConstantZoneState& m_constants;
+        ISearchPath& m_search_path;
         GdtEntry m_entry;
+        bool m_is_additive = false;
+        bool m_is_phong = false;
     };
 } // namespace
 
 namespace material
 {
+    void GdtDumperIW3::Dump(AssetDumpingContext& context)
+    {
+        // Texture def names are resolved from the shaders of the zone, do not rely on another dumper having done it
+        context.GetZoneAssetDumperState<MaterialConstantZoneState>()->EnsureInitialized();
+
+        AbstractAssetDumper::Dump(context);
+    }
+
     void GdtDumperIW3::DumpAsset(AssetDumpingContext& context, const XAssetInfo<AssetMaterial::Type>& asset)
     {
         if (!context.m_gdt)
             return;
 
         auto* constants = context.GetZoneAssetDumperState<MaterialConstantZoneState>();
-        MaterialGdtDumper dumper(*asset.Asset(), *constants);
-        context.m_gdt->WriteEntry(dumper.CreateGdtEntry());
+        MaterialGdtDumper dumper(*asset.Asset(), *constants, context.m_obj_search_path);
+
+        std::string reason;
+        if (!dumper.CanConvert(reason))
+        {
+            con::warn("Skipping material \"{}\" in gdt: {}", asset.m_name, reason);
+            return;
+        }
+
+        const auto entry = dumper.CreateGdtEntry();
+        context.GetZoneAssetDumperState<GdtMaterials>()->Add(entry.m_name);
+        context.m_gdt->WriteEntry(entry);
     }
 } // namespace material
