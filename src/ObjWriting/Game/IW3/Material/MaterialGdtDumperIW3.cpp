@@ -285,7 +285,22 @@ namespace
                 if (!textureDef.u.image || !textureDef.u.image->name)
                     continue;
 
-                SetValue(knownMap->second.m_gdt_name, SourceImagePath(AssetName(textureDef.u.image->name)));
+                const auto* imageName = AssetName(textureDef.u.image->name);
+
+                // A leading tilde marks an image the converter composited out of several source images, most commonly
+                // the specular color and cosine power pair that CoD4 packs into one map. AssetManager cannot take one
+                // back as a source ("is not a compositable image type") and the originals are not recoverable, so the
+                // map is left unset rather than pointing at something that fails to convert.
+                if (imageName[0] == '~')
+                {
+                    con::warn("Material \"{}\" uses composited image \"{}\" as {}, which cannot be a gdt source image",
+                              m_material.info.name,
+                              imageName,
+                              knownMap->second.m_gdt_name);
+                    continue;
+                }
+
+                SetValue(knownMap->second.m_gdt_name, SourceImagePath(imageName));
                 SetValue("tile"s + knownMap->second.m_property_suffix, GdtTileModeNames[static_cast<size_t>(GetTileMode(textureDef.samplerState))]);
                 SetValue("filter"s + knownMap->second.m_property_suffix, GdtFilterNames[static_cast<size_t>(GetFilter(textureDef.samplerState))]);
                 SetValue("format"s + knownMap->second.m_property_suffix, GDT_FORMAT_AUTO);
