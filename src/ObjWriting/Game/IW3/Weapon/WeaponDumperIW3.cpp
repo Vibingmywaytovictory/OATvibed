@@ -8,7 +8,9 @@
 #include "Weapon/AccuracyGraphWriter.h"
 #include "Weapon/WeaponCommon.h"
 
+#include <algorithm>
 #include <cassert>
+#include <format>
 #include <functional>
 #include <sstream>
 #include <type_traits>
@@ -258,6 +260,30 @@ namespace
 
 namespace
 {
+    /**
+     * \brief Turns the fx asset names of a weapon into the source paths AssetManager expects.
+     *
+     * The raw weapon file references an effect by asset name, "shellejects/rifle". A gdt entry instead points at the
+     * source the converter builds that from, "fx\shellejects\rifle.efx", the way the stock weaponsettings gdt does.
+     * Without this the converter cannot find the effect and gives up on the weapon.
+     */
+    void ConvertFxNamesToSourcePaths(GdtEntry& gdtEntry)
+    {
+        for (const auto& field : weapon_fields)
+        {
+            if (field.iFieldType != CSPFT_FX)
+                continue;
+
+            const auto existingProperty = gdtEntry.m_properties.find(field.szName);
+            if (existingProperty == gdtEntry.m_properties.end() || existingProperty->second.empty())
+                continue;
+
+            auto sourcePath = std::format("fx/{}.efx", existingProperty->second);
+            std::ranges::replace(sourcePath, '/', '\\');
+            existingProperty->second = std::move(sourcePath);
+        }
+    }
+
     const char* GdfFilenameForWeapon(const WeaponDef& weapon)
     {
         switch (weapon.weapType)
@@ -285,6 +311,7 @@ namespace weapon
             const auto infoString = CreateInfoString(asset);
             GdtEntry gdtEntry(asset.m_name, GdfFilenameForWeapon(*asset.Asset()));
             infoString.ToGdtProperties(INFO_STRING_PREFIX_WEAPON, gdtEntry);
+            ConvertFxNamesToSourcePaths(gdtEntry);
             context.m_gdt->WriteEntry(gdtEntry);
         }
         else
