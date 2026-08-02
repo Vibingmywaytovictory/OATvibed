@@ -2,9 +2,9 @@
 
 namespace material
 {
-    void GdtMaterials::Add(std::string materialName)
+    bool GdtMaterials::Add(std::string materialName)
     {
-        m_written.emplace(std::move(materialName));
+        return m_written.emplace(std::move(materialName)).second;
     }
 
     bool GdtMaterials::Contains(const std::string& materialName) const

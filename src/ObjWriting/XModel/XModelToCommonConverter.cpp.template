@@ -34,6 +34,10 @@
 #include "Utils/QuatInt16.h"
 #include "XModel/XModelWriter.h"
 
+#ifdef FEATURE_IW3
+#include "Material/MaterialGdtNaming.h"
+#endif
+
 #include <cassert>
 #include <format>
 #include <string_view>
@@ -322,7 +326,13 @@ namespace
                 XModelMaterial xMaterial;
                 xMaterial.ApplyDefaults();
 
+#ifdef FEATURE_IW3
+                // Prefix-stripped to match the material gdt entries: the native converter looks the name up in the
+                // gdt and prepends the mc/ wc/ prefix itself when compiling.
+                xMaterial.name = material::StripTechniqueCategoryPrefix(AssetName(material->info.name));
+#else
                 xMaterial.name = AssetName(material->info.name);
+#endif
                 const auto* colorMap = GetMaterialColorMap(material);
                 if (colorMap)
                     xMaterial.colorMapName = AssetName(colorMap->name);

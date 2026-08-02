@@ -5,6 +5,7 @@
 #include "Game/IW3/ObjConstantsIW3.h"
 #include "Game/IW3/Techset/TechsetConstantsIW3.h"
 #include "Image/ImageCommon.h"
+#include "Material/MaterialGdtNaming.h"
 #include "Material/MaterialGdtZoneState.h"
 #include "ObjWriting.h"
 #include "SearchPath/ISearchPath.h"
@@ -56,7 +57,9 @@ namespace
             : m_material(material),
               m_constants(constants),
               m_search_path(searchPath),
-              m_entry(AssetName(material.info.name), GDF_FILENAME_MATERIAL)
+              // Prefix-stripped: AssetManager derives the mc/ wc/ prefix from materialType itself, and the linker
+              // strips it when resolving raw/materials files. A prefixed entry name would double the prefix.
+              m_entry(material::StripTechniqueCategoryPrefix(AssetName(material.info.name)), GDF_FILENAME_MATERIAL)
         {
         }
 
@@ -411,7 +414,12 @@ namespace material
         }
 
         const auto entry = dumper.CreateGdtEntry();
-        context.GetZoneAssetDumperState<GdtMaterials>()->Add(entry.m_name);
+        if (!context.GetZoneAssetDumperState<GdtMaterials>()->Add(entry.m_name))
+        {
+            // A zone can hold mc/ and wc/ variants of the same material; both compile from one entry natively.
+            con::warn("Skipping material \"{}\" in gdt: an entry named \"{}\" was already written", asset.m_name, entry.m_name);
+            return;
+        }
         context.m_gdt->WriteEntry(entry);
     }
 } // namespace material

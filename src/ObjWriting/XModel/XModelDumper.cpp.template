@@ -42,6 +42,7 @@
 #include CONVERTER_HEADER
 #include OBJ_CONSTANTS_HEADER
 
+#include "Material/MaterialGdtNaming.h"
 #include "Material/MaterialGdtZoneState.h"
 #include "Obj/Gdt/GdtEntry.h"
 #include "ObjWriting.h"
@@ -500,7 +501,8 @@ namespace
             if (!materialHandle || !materialHandle->info.name)
                 continue;
 
-            const auto* materialName = AssetName(materialHandle->info.name);
+            // The gdt records materials by their prefix-stripped entry name
+            const auto* materialName = material::StripTechniqueCategoryPrefix(AssetName(materialHandle->info.name));
             if (!gdtMaterials->Contains(materialName))
             {
                 con::warn(R"(Skipping xmodel "{}" in gdt: material "{}" is not in the gdt)", model.name, materialName);
