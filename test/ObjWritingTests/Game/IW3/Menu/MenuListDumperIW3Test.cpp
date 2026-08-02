@@ -11,7 +11,7 @@ using namespace IW3;
 
 namespace
 {
-    TEST_CASE("MenuListDumperIW3: Can dump several menu entries", "[iw3][menu][menulist][assetdumper]")
+    TEST_CASE("MenuListDumperIW3: Writes member menus into the list file", "[iw3][menu][menulist][assetdumper]")
     {
         menuDef_t mainMenu{};
         mainMenu.window.name = "main";
@@ -42,9 +42,21 @@ namespace
         const auto* file = mockOutput.GetMockedFile("ui_mp/menus.txt");
         REQUIRE(file);
 
+        // The native linker's menu parser cannot follow loadMenu references, so members are written into the
+        // list file itself. A menu of another fastfile has nothing to write and keeps the reference format.
         constexpr auto expectedOutput = R"({
-    loadMenu { "ui_mp/main.menu" }
-    loadMenu { "ui_mp/options.menu" }
+    menuDef
+    {
+        name                        "main"
+        rect                        0 0 0 0 0 0
+        forecolor                   0 0 0 0
+    }
+    menuDef
+    {
+        name                        "options"
+        rect                        0 0 0 0 0 0
+        forecolor                   0 0 0 0
+    }
     loadMenu { "ui_mp/confirmation.menu" }
 }
 )";

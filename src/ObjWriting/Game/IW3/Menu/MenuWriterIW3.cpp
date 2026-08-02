@@ -116,8 +116,29 @@ namespace
                 m_stream << ")";
         }
 
+        /**
+         * \brief Whether a minus at this position negates its operand rather than subtracting.
+         *
+         * That is the case at the start of an expression or right after another operator -- except a closing
+         * parenthesis, which ends a value. A function call's arguments end in one of those as well.
+         */
+        static bool IsUnaryMinus(const statement_s& statement, const size_t operatorPos)
+        {
+            for (auto pos = operatorPos; pos > 0; pos--)
+            {
+                const auto* previousEntry = statement.entries[pos - 1];
+                if (!previousEntry)
+                    continue;
+
+                return previousEntry->type == EET_OPERATOR && previousEntry->data.op != OP_RIGHTPAREN;
+            }
+
+            return true;
+        }
+
         void WriteStatementOperator(const statement_s& statement, size_t& currentPos, bool& spaceNext) const
         {
+            const auto operatorPos = currentPos;
             const auto& expEntry = statement.entries[currentPos];
 
             if (spaceNext && expEntry->data.op != OP_COMMA)
@@ -150,7 +171,9 @@ namespace
                 else
                     currentPos++;
 
-                spaceNext = expEntry->data.op != OP_NOT;
+                // Unary operators bind to their operand without a space: the native menu parser rejects `(- 107)`,
+                // the games own sources write `(-107)`.
+                spaceNext = expEntry->data.op != OP_NOT && !(expEntry->data.op == OP_SUBTRACT && IsUnaryMinus(statement, operatorPos));
             }
         }
 
@@ -247,23 +270,16 @@ namespace
             Indent();
             WriteKey(propertyKey);
 
-            if (isBooleanStatement)
-            {
-                m_stream << "when(";
-                if constexpr (DUMP_NAIVE)
-                    WriteStatementNaive(statement);
-                else
-                    WriteStatementSkipInitialUnnecessaryParenthesis(statement);
-                m_stream << ");\n";
-            }
+            // The native menu parser reads an expression only as a single parenthesized group, so the whole
+            // statement has to be wrapped in exactly one pair -- the games own sources write `exp rect X((-107) - (...))`.
+            m_stream << (isBooleanStatement ? "when(" : "(");
+
+            if constexpr (DUMP_NAIVE)
+                WriteStatementNaive(statement);
             else
-            {
-                if constexpr (DUMP_NAIVE)
-                    WriteStatementNaive(statement);
-                else
-                    WriteStatement(statement);
-                m_stream << ";\n";
-            }
+                WriteStatementSkipInitialUnnecessaryParenthesis(statement);
+
+            m_stream << ");\n";
         }
 
         // #define WRITE_ORIGINAL_SCRIPT

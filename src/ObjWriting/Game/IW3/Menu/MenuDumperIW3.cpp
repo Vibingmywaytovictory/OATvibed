@@ -36,6 +36,12 @@ namespace menu
             for (auto* menuListAsset : menuListAssets)
                 CreateDumpingStateForMenuListIW3(zoneState, menuListAsset->Asset());
         }
+        else if (zoneState->m_menu_dumping_state_map.contains(asset.Asset()))
+        {
+            // The menu is a member of a menu list and written into the list's own file -- a separate file would
+            // overwrite a same-named list file and could not be referenced by it natively anyhow.
+            return;
+        }
 
         const auto menuFilePath = GetPathForMenu(zoneState, asset);
         const auto assetFile = context.OpenAssetFile(menuFilePath);

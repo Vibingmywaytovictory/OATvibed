@@ -1,6 +1,7 @@
 #include "Game/IW3/Menu/MenuDumperIW3.h"
 
 #include "Game/IW3/Menu/MenuListDumperIW3.h"
+#include "ObjWriting.h"
 #include "Parsing/Menu/MenuFileReader.h"
 #include "SearchPath/MockOutputPath.h"
 #include "SearchPath/MockSearchPath.h"
@@ -11,6 +12,7 @@
 #include <memory>
 #include <sstream>
 #include <string>
+#include <vector>
 
 using namespace IW3;
 
@@ -86,6 +88,18 @@ namespace
         };
         auto materialExpressionEntries = EntryPointers(materialExpressionValues);
 
+        // (-107) - localvarint("ui_scroll"): unary minus must stick to its operand and the whole expression must
+        // come out as a single parenthesized group, or the native menu parser rejects it
+        auto rectXExpressionValues = std::array{Operator(OP_LEFTPAREN),
+                                                Operator(OP_SUBTRACT),
+                                                IntOperand(107),
+                                                Operator(OP_RIGHTPAREN),
+                                                Operator(OP_SUBTRACT),
+                                                Operator(OP_LOCALVARINT),
+                                                StringOperand("ui_scroll"),
+                                                Operator(OP_RIGHTPAREN)};
+        auto rectXExpressionEntries = EntryPointers(rectXExpressionValues);
+
         Material backgroundMaterial{};
         backgroundMaterial.info.name = "background_material";
 
@@ -131,6 +145,7 @@ namespace
         button.onKey = &buttonKeyHandler;
         button.visibleExp = {.numEntries = static_cast<int>(buttonVisibleEntries.size()), .entries = buttonVisibleEntries.data()};
         button.materialExp = {.numEntries = static_cast<int>(materialExpressionEntries.size()), .entries = materialExpressionEntries.data()};
+        button.rectXExp = {.numEntries = static_cast<int>(rectXExpressionEntries.size()), .entries = rectXExpressionEntries.data()};
 
         editFieldDef_s editField{};
         editField.minVal = -1.0f;
@@ -304,6 +319,7 @@ namespace
                 open advanced;
             }
             exp material                ("expression_material");
+            exp rect X                  ((-107) - localvarint("ui_scroll"));
         }
         itemDef
         {
@@ -353,6 +369,47 @@ namespace
         REQUIRE(parsed->m_menus[0]->m_items[1]->m_dvar == "player_name");
     }
 
+    TEST_CASE("MenuDumperIW3: Leaves menu list members to the menu list file", "[iw3][menu][assetdumper]")
+    {
+        menuDef_t memberMenu{};
+        memberMenu.window.name = "menus";
+
+        menuDef_t standaloneMenu{};
+        standaloneMenu.window.name = "standalone";
+
+        menuDef_t* menus[]{&memberMenu};
+
+        MenuList menuList{};
+        menuList.name = "ui/menus.menu";
+        menuList.menuCount = static_cast<int>(std::size(menus));
+        menuList.menus = menus;
+
+        Zone zone("MockZone", 0, GameId::IW3, GamePlatform::PC);
+        zone.m_pools.AddAsset(std::make_unique<XAssetInfo<menuDef_t>>(ASSET_TYPE_MENU, memberMenu.window.name, &memberMenu));
+        zone.m_pools.AddAsset(std::make_unique<XAssetInfo<menuDef_t>>(ASSET_TYPE_MENU, standaloneMenu.window.name, &standaloneMenu));
+        zone.m_pools.AddAsset(std::make_unique<XAssetInfo<MenuList>>(ASSET_TYPE_MENULIST, menuList.name, &menuList));
+
+        MockSearchPath mockObjPath;
+        MockOutputPath mockOutput;
+        AssetDumpingContext context(zone, "", mockOutput, mockObjPath, std::nullopt);
+
+        menu::MenuListDumperIW3 menuListDumper;
+        menuListDumper.Dump(context);
+
+        menu::MenuDumperIW3 menuDumper;
+        menuDumper.Dump(context);
+
+        // The member menu shares its file name with the list; writing it separately would overwrite the list
+        // file and lose every other member, so the menu dumper leaves members to the list dumper.
+        const auto* listFile = mockOutput.GetMockedFile("ui/menus.menu");
+        REQUIRE(listFile);
+        REQUIRE(listFile->AsString().find("menuDef") != std::string::npos);
+        REQUIRE_FALSE(mockOutput.GetMockedFile("ui_mp/menus.menu"));
+
+        // A menu belonging to no list still gets its own file
+        REQUIRE(mockOutput.GetMockedFile("ui_mp/standalone.menu"));
+    }
+
     TEST_CASE("MenuDumperIW3: Prefers parent menu list path over ui_mp fallback", "[iw3][menu][assetdumper]")
     {
         menuDef_t menu{};
@@ -373,11 +430,15 @@ namespace
         MockOutputPath mockOutput;
         AssetDumpingContext context(zone, "", mockOutput, mockObjPath, std::nullopt);
 
-        menu::MenuListDumperIW3 menuListDumper;
-        menuListDumper.Dump(context);
+        // With menu lists excluded from the dump, menus are dumped standalone at the path their list gives them
+        auto previousConfiguration = ObjWriting::Configuration.AssetTypesToHandleBitfield;
+        ObjWriting::Configuration.AssetTypesToHandleBitfield = std::vector(static_cast<size_t>(ASSET_TYPE_MENULIST) + 1u, true);
+        ObjWriting::Configuration.AssetTypesToHandleBitfield[ASSET_TYPE_MENULIST] = false;
 
         menu::MenuDumperIW3 menuDumper;
         menuDumper.Dump(context);
+
+        ObjWriting::Configuration.AssetTypesToHandleBitfield = std::move(previousConfiguration);
 
         REQUIRE(mockOutput.GetMockedFile("ui/test_menu.menu"));
         REQUIRE_FALSE(mockOutput.GetMockedFile("ui_mp/test_menu.menu"));
