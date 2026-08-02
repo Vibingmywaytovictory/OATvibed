@@ -127,6 +127,13 @@ const CommandLineOption* const OPTION_LEGACY_MENUS =
     .WithDescription("Dumps menus with a compatibility mode to work with applications not compatible with the newer dumping mode.")
     .Build();
 
+const CommandLineOption* const OPTION_GDT_SKIP_UNCONVERTIBLE =
+    CommandLineOption::Builder::Create()
+    .WithLongName("gdt-skip-unconvertible")
+    .WithDescription("Leaves assets that are known not to convert out of the GDT. AssetManager aborts a whole \"convert all\" "
+                     "on the first asset that fails, so this trades those assets for being able to convert the rest in one go.")
+    .Build();
+
 // clang-format on
 
 const CommandLineOption* const COMMAND_LINE_OPTIONS[]{
@@ -146,6 +153,7 @@ const CommandLineOption* const COMMAND_LINE_OPTIONS[]{
     OPTION_EXCLUDE_ASSETS,
     OPTION_INCLUDE_ASSETS,
     OPTION_LEGACY_MENUS,
+    OPTION_GDT_SKIP_UNCONVERTIBLE,
 };
 
 UnlinkerArgs::UnlinkerArgs()
@@ -387,6 +395,9 @@ bool UnlinkerArgs::ParseArgs(const int argc, const char** argv, bool& shouldCont
     // --legacy-menus
     if (m_argument_parser.IsOptionSpecified(OPTION_LEGACY_MENUS))
         ObjWriting::Configuration.MenuLegacyMode = true;
+
+    if (m_argument_parser.IsOptionSpecified(OPTION_GDT_SKIP_UNCONVERTIBLE))
+        ObjWriting::Configuration.GdtSkipUnconvertible = true;
 
     return true;
 }

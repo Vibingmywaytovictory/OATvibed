@@ -26,6 +26,19 @@ namespace
         return name;
     }
 
+    /**
+     * \brief Whether an image was produced by the converter rather than authored, so it cannot be a gdt source image.
+     *
+     * A leading tilde marks an image composited out of several source images, most commonly the specular color and
+     * cosine power pair that CoD4 packs into one map. A leading dollar marks an engine built-in such as
+     * $identitynormalmap, dumped as a 1x1 placeholder AssetManager rejects with "unknown format 00000000".
+     * Neither has recoverable originals.
+     */
+    bool IsGeneratedImage(const char* imageName)
+    {
+        return imageName[0] == '~' || imageName[0] == '$';
+    }
+
     // material.gdf expects a source image, and DDS is the only dumpable format AssetManager reads.
     // The path is relative to the game root, which is where the dumped images folder is meant to end up.
     std::string SourceImagePath(const char* imageName)
@@ -66,7 +79,7 @@ namespace
                     continue;
 
                 const auto* imageName = AssetName(textureDef.u.image->name);
-                if (imageName[0] == '~')
+                if (IsGeneratedImage(imageName))
                     continue;
 
                 // The dumped image comes from an iwi of the search path, not from the fastfile itself
@@ -342,9 +355,9 @@ namespace
                 // the specular color and cosine power pair that CoD4 packs into one map. AssetManager cannot take one
                 // back as a source ("is not a compositable image type") and the originals are not recoverable, so the
                 // map is left unset rather than pointing at something that fails to convert.
-                if (imageName[0] == '~')
+                if (IsGeneratedImage(imageName))
                 {
-                    con::warn("Material \"{}\" uses composited image \"{}\" as {}, which cannot be a gdt source image",
+                    con::warn("Material \"{}\" uses generated image \"{}\" as {}, which cannot be a gdt source image",
                               m_material.info.name,
                               imageName,
                               knownMap->second.m_gdt_name);
@@ -388,8 +401,13 @@ namespace material
         std::string reason;
         if (!dumper.CanConvert(reason))
         {
-            con::warn("Skipping material \"{}\" in gdt: {}", asset.m_name, reason);
-            return;
+            if (ObjWriting::Configuration.GdtSkipUnconvertible)
+            {
+                con::warn("Skipping material \"{}\" in gdt: {}", asset.m_name, reason);
+                return;
+            }
+
+            con::warn("Material \"{}\" will not convert: {}", asset.m_name, reason);
         }
 
         const auto entry = dumper.CreateGdtEntry();

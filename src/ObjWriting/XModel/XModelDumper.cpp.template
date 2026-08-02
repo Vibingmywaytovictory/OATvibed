@@ -490,7 +490,7 @@ namespace
     // happens, so a model referencing a material that was left out of the gdt has to be left out as well.
     bool HasAllMaterialsInGdt(AssetDumpingContext& context, const XModel& model)
     {
-        if (!model.materialHandles)
+        if (!model.materialHandles || !ObjWriting::Configuration.GdtSkipUnconvertible)
             return true;
 
         const auto* gdtMaterials = context.GetZoneAssetDumperState<material::GdtMaterials>();

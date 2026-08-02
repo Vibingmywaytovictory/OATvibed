@@ -36,6 +36,27 @@ namespace
 
         return std::nullopt;
     }
+
+    // A mod fastfile lives in <game>/mods/<mod>. Its own folder holds the mod iwds, but images and other data the mod
+    // did not replace still come from the base game, so the game root has to be found from here as well.
+    std::optional<std::string> FindGameRootFolderOfMod(const std::string& zoneParentPath)
+    {
+        const auto modNameSeparator = zoneParentPath.find_last_of('/');
+        if (modNameSeparator == std::string::npos || modNameSeparator == 0)
+            return std::nullopt;
+
+        auto modsFolder = zoneParentPath.substr(0, modNameSeparator);
+        const auto modsFolderSeparator = modsFolder.find_last_of('/');
+        if (modsFolderSeparator == std::string::npos)
+            return std::nullopt;
+
+        auto modsFolderName = modsFolder.substr(modsFolderSeparator + 1);
+        utils::MakeStringLowerCase(modsFolderName);
+        if (modsFolderName != "mods")
+            return std::nullopt;
+
+        return modsFolder.substr(0, modsFolderSeparator);
+    }
 } // namespace
 
 std::vector<std::string> AutoSearchPaths::GetSearchPathsForZonePath(const std::string& zonePath) const
@@ -43,13 +64,23 @@ std::vector<std::string> AutoSearchPaths::GetSearchPathsForZonePath(const std::s
     auto folderName = fs::absolute(fs::path(zonePath)).parent_path().string();
     std::ranges::replace(folderName, '\\', '/');
 
-    const auto maybeGameRootFolder = FindGameRootFolder(folderName, RecognizedZoneDirs());
+    std::vector<std::string> result;
+
+    auto maybeGameRootFolder = FindGameRootFolder(folderName, RecognizedZoneDirs());
+    if (!maybeGameRootFolder)
+    {
+        maybeGameRootFolder = FindGameRootFolderOfMod(folderName);
+
+        // The mod folder itself comes first so that anything the mod ships takes precedence over the base game
+        if (maybeGameRootFolder)
+            result.emplace_back(folderName);
+    }
+
     if (!maybeGameRootFolder)
         return {folderName};
 
     con::debug("Detected game directory: {}", *maybeGameRootFolder);
 
-    std::vector<std::string> result;
     const fs::path gameRootFolderPath(*maybeGameRootFolder);
 
     for (const auto& dir : RecognizedZoneDirs())
