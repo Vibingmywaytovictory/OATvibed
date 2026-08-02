@@ -37,10 +37,12 @@ function useSourceTemplating(projectName)
                 TargetDirectoryBuildTools .. "/" .. ExecutableByOs('RawTemplater')
             }
             buildcommands {
-                '"' .. TargetDirectoryBuildTools .. '/' .. ExecutableByOs('RawTemplater') .. '"' 
+                -- All paths absolute: custom build steps do not run with the project directory as
+                -- working directory on every MSBuild version, and the templater resolves them against cwd
+                '"' .. TargetDirectoryBuildTools .. '/' .. ExecutableByOs('RawTemplater') .. '"'
                 .. ' -o "%{prj.location}/"'
-				.. " --build-log \"" .. relativeLogFilePath .. "\""
-                .. " %{file.relpath}"
+				.. ' --build-log "%{prj.location}/' .. relativeLogFilePath .. '"'
+                .. ' "%{file.abspath}"'
             }
             buildoutputs {
                 "%{prj.location}/" .. relativeLogFilePath
