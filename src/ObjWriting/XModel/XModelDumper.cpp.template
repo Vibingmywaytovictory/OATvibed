@@ -40,7 +40,10 @@
 #include COMMON_HEADER
 #include JSON_HEADER
 #include CONVERTER_HEADER
+#ifdef FEATURE_IW3
+// Only the gdt entry below needs it, and not every game has one
 #include OBJ_CONSTANTS_HEADER
+#endif
 
 #include "Dumping/GdtOutputStreamCollection.h"
 #include "Material/MaterialGdtNaming.h"
