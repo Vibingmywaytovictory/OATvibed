@@ -143,26 +143,6 @@ namespace
             return true;
         }
 
-        static bool OpenGdtFile(const Zone& zone, const fs::path& outputFolder, std::ofstream& stream)
-        {
-            auto gdtFilePath(outputFolder);
-            gdtFilePath.append("source_data");
-
-            fs::create_directories(gdtFilePath);
-
-            gdtFilePath.append(zone.m_name);
-            gdtFilePath.replace_extension(".gdt");
-
-            stream = std::ofstream(gdtFilePath, std::fstream::out | std::fstream::binary);
-            if (!stream.is_open())
-            {
-                con::error("Failed to open file for zone definition file of zone \"{}\".", zone.m_name);
-                return false;
-            }
-
-            return true;
-        }
-
         void UpdateAssetIncludesAndExcludes(const AssetDumpingContext& context) const
         {
             const auto gameId = context.m_zone.m_game_id;
@@ -213,7 +193,7 @@ namespace
          * \param zone The zone to handle.
          * \return \c true if handling the zone was successful, otherwise \c false
          */
-        bool HandleZone(ISearchPath& searchPath, Zone& zone) const
+        bool HandleZone(ISearchPath& searchPath, Zone& zone)
         {
             if (m_args.m_task == UnlinkerArgs::ProcessingTask::LIST)
             {
@@ -236,20 +216,8 @@ namespace
                 OutputPathFilesystem outputFolderOutputPath(outputFolderPath);
                 AssetDumpingContext context(zone, outputFolderPathStr, outputFolderOutputPath, searchPath, std::nullopt);
 
-                std::ofstream gdtStream;
                 if (m_args.m_use_gdt)
-                {
-                    if (!OpenGdtFile(zone, outputFolderPath, gdtStream))
-                        return false;
-                    auto gdt = std::make_unique<GdtOutputStream>(gdtStream);
-                    gdt->BeginStream();
-
-                    // No version entry: AssetManager resolves every entry against a gdf of the same name and there is
-                    // no version.gdf, so it would reject the file. Reading a gdt without one is fine, the version is
-                    // optional to GdtReader and nothing consumes it.
-
-                    context.m_gdt = std::move(gdt);
-                }
+                    context.m_gdt = std::make_unique<GdtOutputStreamCollection>(outputFolderOutputPath, zone.m_name, m_gdt_entry_names);
 
                 UpdateAssetIncludesAndExcludes(context);
 
@@ -258,11 +226,8 @@ namespace
                 con::info("Dumping zone {} into folder \"{}\"", zone.m_name, outputFolderPath.string());
                 auto result = objWriter->DumpZone(context);
 
-                if (m_args.m_use_gdt)
-                {
-                    context.m_gdt->EndStream();
-                    gdtStream.close();
-                }
+                // Closes every gdt file the dumpers made use of
+                context.m_gdt.reset();
 
                 if (!result)
                 {
@@ -338,7 +303,7 @@ namespace
             m_loaded_zones.clear();
         }
 
-        bool UnlinkZones(SharedSearchPaths& paths) const
+        bool UnlinkZones(SharedSearchPaths& paths)
         {
             ReferencedSearchPaths previousSearchPaths;
 
@@ -401,6 +366,8 @@ namespace
         }
 
         UnlinkerArgs m_args;
+        // Shared by every zone of the run so the gdts of a mod and of the base game it overrides do not collide
+        GdtEntryNames m_gdt_entry_names;
         std::vector<std::unique_ptr<LoadedZoneInformation>> m_loaded_zones;
     };
 } // namespace

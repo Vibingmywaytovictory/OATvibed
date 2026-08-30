@@ -1,7 +1,7 @@
 #pragma once
 
+#include "GdtOutputStreamCollection.h"
 #include "IZoneAssetDumperState.h"
-#include "Obj/Gdt/GdtStream.h"
 #include "SearchPath/IOutputPath.h"
 #include "SearchPath/ISearchPath.h"
 #include "Utils/ProgressCallback.h"
@@ -47,7 +47,7 @@ public:
     const std::string& m_base_path;
     IOutputPath& m_output_path;
     ISearchPath& m_obj_search_path;
-    std::unique_ptr<GdtOutputStream> m_gdt;
+    std::unique_ptr<GdtOutputStreamCollection> m_gdt;
 
 private:
     std::unordered_map<std::type_index, std::unique_ptr<IZoneAssetDumperState>> m_zone_asset_dumper_states;

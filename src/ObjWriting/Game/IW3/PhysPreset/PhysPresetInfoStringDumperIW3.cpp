@@ -1,5 +1,6 @@
 #include "PhysPresetInfoStringDumperIW3.h"
 
+#include "Dumping/GdtOutputStreamCollection.h"
 #include "Game/IW3/InfoString/InfoStringFromStructConverter.h"
 #include "Game/IW3/ObjConstantsIW3.h"
 #include "Game/IW3/PhysPreset/PhysPresetFieldsIW3.h"
@@ -72,7 +73,7 @@ namespace phys_preset
             const auto infoString = CreateInfoString(*asset.Asset());
             GdtEntry gdtEntry(asset.m_name, GDF_FILENAME_PHYS_PRESET);
             infoString.ToGdtProperties(INFO_STRING_PREFIX_PHYS_PRESET, gdtEntry);
-            context.m_gdt->WriteEntry(gdtEntry);
+            context.m_gdt->WriteEntry(gdt_group::PHYS_PRESETS, gdtEntry);
         }
         else
         {

@@ -21,5 +21,10 @@ namespace image
     {
     public:
         std::unique_ptr<Texture> Convert(const XAssetInfoGeneric& assetInfo, ISearchPath& searchPath) override;
+
+        /**
+         * \brief Loads the pixels of an image that is only known by its asset struct, like one a material references.
+         */
+        static std::unique_ptr<Texture> LoadTexture(const GAME::GfxImage& image, ISearchPath& searchPath);
     };
 } // namespace xmodel

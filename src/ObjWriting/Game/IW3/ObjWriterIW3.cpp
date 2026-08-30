@@ -26,8 +26,9 @@ void ObjWriter::RegisterAssetDumpers(AssetDumpingContext& context)
 {
     RegisterAssetDumper(std::make_unique<phys_preset::InfoStringDumperIW3>());
     RegisterAssetDumper(std::make_unique<xanim::DumperIW3>());
-    // Materials are registered before xmodels so that a gdt lists them first. AssetManager cannot convert an xmodel
-    // before every material it references exists, and it converts a gdt in the order the entries appear in.
+    // Materials are registered before xmodels because the xmodel dumper skips models whose materials did not make it
+    // into the gdt, which it can only tell once the material dumper has run. Their entries land in separate gdt files,
+    // so the user converts <zone>_materials.gdt before <zone>_xmodels.gdt.
     RegisterAssetDumper(std::make_unique<material::JsonDumperIW3>());
     RegisterAssetDumper(std::make_unique<material::GdtDumperIW3>());
     RegisterAssetDumper(std::make_unique<xmodel::DumperIW3>());

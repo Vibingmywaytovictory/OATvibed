@@ -162,8 +162,11 @@ namespace image
 {
     std::unique_ptr<Texture> CLASS_NAME::Convert(const XAssetInfoGeneric& assetInfo, ISearchPath& searchPath)
     {
-        const auto& image = *reinterpret_cast<const XAssetInfo<AssetImage::Type>*>(&assetInfo)->Asset();
-        
+        return LoadTexture(*reinterpret_cast<const XAssetInfo<AssetImage::Type>*>(&assetInfo)->Asset(), searchPath);
+    }
+
+    std::unique_ptr<Texture> CLASS_NAME::LoadTexture(const GfxImage& image, ISearchPath& searchPath)
+    {
         if (image.texture.loadDef && image.texture.loadDef->resourceSize > 0)
             return LoadImageFromLoadDef(image);
 

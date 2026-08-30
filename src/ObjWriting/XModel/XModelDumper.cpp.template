@@ -42,6 +42,7 @@
 #include CONVERTER_HEADER
 #include OBJ_CONSTANTS_HEADER
 
+#include "Dumping/GdtOutputStreamCollection.h"
 #include "Material/MaterialGdtNaming.h"
 #include "Material/MaterialGdtZoneState.h"
 #include "Obj/Gdt/GdtEntry.h"
@@ -553,7 +554,7 @@ namespace
         for (const auto* defaultEmptyField : {"hitBoxModel", "skinOverride", "boneControllers", "boneStabilizers"})
             gdtEntry.m_properties.emplace(defaultEmptyField, "");
 
-        context.m_gdt->WriteEntry(gdtEntry);
+        context.m_gdt->WriteEntry(gdt_group::XMODELS, gdtEntry);
     }
 #endif
 } // namespace

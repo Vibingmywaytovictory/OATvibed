@@ -72,8 +72,55 @@ namespace IW3
     // The gdf offers a single value only, unlike the surfaceTypeBits bitfield of the compiled material
     constexpr auto GDT_SURFACE_TYPE_NONE = "<none>";
 
-    // Every stock material leaves this at the default and lets AssetManager derive the sort from the material type
+    // Left at the default, AssetManager derives the sort from the blend func and material type, which reproduces the
+    // original sort key for the great majority of materials but not for the ones that were sorted by hand.
     constexpr auto GDT_SORT_DEFAULT = "<default>*";
+
+    /**
+     * rief The sort key each gdf "sort" value compiles to, measured by converting one material once per value.
+     *
+     * The gdf list is not contiguous - the engine keeps gaps between the groups - so the sort key cannot index it and
+     * a material whose key falls in a gap has to stay at the default.
+     */
+    inline const std::unordered_map<unsigned char, const char*> GdtSortNames{
+        {0,  "distortion"             },
+        {1,  "opaque water"           },
+        {2,  "boat hull"              },
+        {3,  "opaque ambient"         },
+        {4,  "opaque"                 },
+        {5,  "sky"                    },
+        {6,  "skybox - sun / moon"    },
+        {7,  "skybox - clouds"        },
+        {8,  "skybox - horizon"       },
+        {9,  "decal - bottom 1"       },
+        {10, "decal - bottom 2"       },
+        {11, "decal - bottom 3"       },
+        {12, "decal - static decal"   },
+        {13, "decal - middle 1"       },
+        {14, "decal - middle 2"       },
+        {15, "decal - middle 3"       },
+        {24, "decal - weapon impact"  },
+        {29, "decal - top 1"          },
+        {30, "decal - top 2"          },
+        {31, "decal - top 3"          },
+        {32, "multiplicative"         },
+        {33, "banner / curtain"       },
+        {34, "hair"                   },
+        {35, "underwater"             },
+        {36, "transparent water"      },
+        {37, "corona"                 },
+        {38, "window inside"          },
+        {39, "window outside"         },
+        {40, "before effects - bottom"},
+        {41, "before effects - middle"},
+        {42, "before effects - top"   },
+        {43, "blend / additive"       },
+        {48, "effect - auto sort"     },
+        {56, "after effects - bottom" },
+        {57, "after effects - middle" },
+        {58, "after effects - top"    },
+        {59, "viewmodel effect"       },
+    };
 
     constexpr auto GDT_USAGE_NOT_IN_EDITOR = "<not in editor>";
 
