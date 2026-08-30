@@ -15,8 +15,9 @@ namespace
     {
         const auto menuDumpingState = zoneState->m_menu_dumping_state_map.find(asset.Asset());
 
+        // A menu belonging to no list still has to land somewhere the parser can open again
         if (menuDumpingState == zoneState->m_menu_dumping_state_map.end())
-            return std::format("ui_mp/{}.menu", asset.Asset()->window.name);
+            return menu::MenuFilePathIW3("ui_mp/", asset.Asset()->window.name);
 
         return menuDumpingState->second.m_path;
     }

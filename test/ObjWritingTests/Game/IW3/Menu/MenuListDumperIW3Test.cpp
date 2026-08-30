@@ -55,6 +55,28 @@ namespace
         REQUIRE(file->AsString() == expectedOutput);
     }
 
+    TEST_CASE("MenuListDumperIW3: Keeps a menu file path within what the parser can open", "[iw3][menu][menulist][assetdumper]")
+    {
+        // 63 characters is the most linker_pc can open, so this one is left alone
+        const auto longest = menu::MenuFilePathIW3("ui_mp/", "assault_popup_cac_defaultclasswarning_spec_op");
+        CHECK(longest == "ui_mp/assault_popup_cac_defaultclasswarning_spec_op.menu");
+        CHECK(longest.size() <= 63u);
+
+        // One character more and the name has to be shortened, with a hash to keep it distinct
+        const auto shortened = menu::MenuFilePathIW3("ui_mp/", "heavygunner_popup_cac_defaultclasswarning_demolitions");
+        CHECK(shortened.size() <= 63u);
+        CHECK(shortened.starts_with("ui_mp/heavygunner_popup_cac_"));
+        CHECK(shortened.ends_with(".menu"));
+
+        // Two names that shorten to the same prefix stay apart
+        const auto other = menu::MenuFilePathIW3("ui_mp/", "heavygunner_popup_cac_defaultclasswarning_heavy_gunner");
+        CHECK(other.size() <= 63u);
+        CHECK(other != shortened);
+
+        // The same name always gives the same path, and a leading comma is not part of it
+        CHECK(menu::MenuFilePathIW3("ui_mp/", ",heavygunner_popup_cac_defaultclasswarning_demolitions") == shortened);
+    }
+
     TEST_CASE("MenuListDumperIW3: Writes the member that shares the list path into the list file", "[iw3][menu][menulist][assetdumper]")
     {
         // The list is named after one of its members, which is how the stock zones store a menu that is its own
