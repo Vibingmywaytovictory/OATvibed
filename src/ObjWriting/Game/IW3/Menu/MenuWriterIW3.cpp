@@ -512,15 +512,25 @@ namespace
             Indent();
             WriteKey(multi.strDef ? "dvarStrList" : "dvarFloatList");
             m_stream << "{";
+
+            auto firstValue = true;
             const auto valueCount = std::min<size_t>(multi.count, std::size(multi.dvarValue));
             for (size_t valueIndex = 0u; valueIndex < valueCount; valueIndex++)
             {
                 if (!multi.dvarList[valueIndex] || (multi.strDef && !multi.dvarStr[valueIndex]))
                     continue;
 
+                // A string list is semicolon separated, because a value of one may itself contain spaces
+                // ("wide 16:10"). Without the separators the parser cannot find the end of a value and drops
+                // the entire list, leaving the item with no choices at all. A float list has no such problem
+                // and the game's own sources write it space separated.
+                if (!firstValue && multi.strDef)
+                    m_stream << ";";
+                firstValue = false;
+
                 m_stream << " ";
                 WriteEscapedString(multi.dvarList[valueIndex]);
-                m_stream << " ";
+                m_stream << (multi.strDef ? "; " : " ");
                 if (multi.strDef)
                     WriteEscapedString(multi.dvarStr[valueIndex]);
                 else
