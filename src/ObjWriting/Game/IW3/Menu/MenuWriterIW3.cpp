@@ -7,7 +7,9 @@
 #include <cassert>
 #include <cmath>
 #include <limits>
+#include <ranges>
 #include <sstream>
+#include <vector>
 
 using namespace IW3;
 
@@ -367,7 +369,13 @@ namespace
 
         void WriteItemKeyHandlers(const ItemKeyHandler* handler)
         {
+            // The menu parser prepends every handler it reads, so the list is in the reverse of the source order.
+            // Writing it out as it stands would flip the handlers on every round trip.
+            std::vector<const ItemKeyHandler*> handlers;
             for (const auto* current = handler; current; current = current->next)
+                handlers.push_back(current);
+
+            for (const auto* current : std::ranges::reverse_view(handlers))
             {
                 std::string key;
                 if (current->key >= '!' && current->key <= '~' && current->key != '"')
@@ -521,13 +529,35 @@ namespace
             m_stream << " }\n";
         }
 
+        void WriteAlwaysFloatProperty(const std::string& propertyKey, const float propertyValue) const
+        {
+            Indent();
+            WriteKey(propertyKey);
+            m_stream << propertyValue << "\n";
+        }
+
+        void WriteMultiListProperty(const itemDef_s& item) const
+        {
+            if (item.type != ITEM_TYPE_MULTI || !item.typeData.multi)
+                return;
+
+            WriteMultiValueProperty(*item.typeData.multi);
+        }
+
+        void WriteEnumDvarListProperty(const itemDef_s& item) const
+        {
+            if (item.type != ITEM_TYPE_DVARENUM)
+                return;
+
+            WriteStringProperty("dvarEnumList", item.typeData.enumDvarName);
+        }
+
         void WriteMultiProperties(const itemDef_s& item) const
         {
             if (item.type != ITEM_TYPE_MULTI || !item.typeData.multi)
                 return;
 
             WriteStringProperty("dvar", item.dvar);
-            WriteMultiValueProperty(*item.typeData.multi);
         }
 
         void WriteEnumDvarProperties(const itemDef_s& item) const
@@ -536,7 +566,6 @@ namespace
                 return;
 
             WriteStringProperty("dvar", item.dvar);
-            WriteStringProperty("dvarEnumList", item.typeData.enumDvarName);
         }
 
         void WriteItemTextProperty(const char* text) const
@@ -562,8 +591,12 @@ namespace
             WriteKeywordProperty("autowrapped", item.window.staticFlags & WINDOW_FLAG_AUTO_WRAPPED);
             WriteKeywordProperty("horizontalscroll", item.window.staticFlags & WINDOW_FLAG_HORIZONTAL_SCROLL);
             WriteIntProperty("type", item.type, ITEM_TYPE_TEXT);
+            // The parser drops a dvar list that does not directly follow the type of the item it belongs to
+            WriteMultiListProperty(item);
+            WriteEnumDvarListProperty(item);
             WriteIntProperty("border", item.window.border, 0);
-            WriteFloatProperty("borderSize", item.window.borderSize, 0.0f);
+            // Written unconditionally: the parser defaults borderSize to 1, so leaving a 0 out changes it
+            WriteAlwaysFloatProperty("borderSize", item.window.borderSize);
 
             if (HasStatement(item.visibleExp))
                 WriteStatementProperty("visible", item.visibleExp, true);

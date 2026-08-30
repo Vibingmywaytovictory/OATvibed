@@ -36,11 +36,13 @@ namespace menu
             for (auto* menuListAsset : menuListAssets)
                 CreateDumpingStateForMenuListIW3(zoneState, menuListAsset->Asset());
         }
-        else if (zoneState->m_menu_dumping_state_map.contains(asset.Asset()))
+        else
         {
-            // The menu is a member of a menu list and written into the list's own file -- a separate file would
-            // overwrite a same-named list file and could not be referenced by it natively anyhow.
-            return;
+            // A menu that shares its path with the list it belongs to is written into that list's file by the menu
+            // list dumper. Writing it here as well would truncate the list file and drop every other member.
+            const auto menuDumpingState = zoneState->m_menu_dumping_state_map.find(asset.Asset());
+            if (menuDumpingState != zoneState->m_menu_dumping_state_map.end() && menuDumpingState->second.m_alias_menu_list)
+                return;
         }
 
         const auto menuFilePath = GetPathForMenu(zoneState, asset);

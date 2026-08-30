@@ -286,6 +286,7 @@ namespace
             rect                        10 20 180 24 1 2
             style                       1
             type                        1
+            borderSize                  0
             visible                     when(localvarint("ui_highlight") == 5 && localvarstring("ui_choicegroup") == "popmenu");
             ownerdrawFlag               4096
             textalign                   10

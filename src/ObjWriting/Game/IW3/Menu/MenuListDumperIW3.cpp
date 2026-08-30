@@ -19,22 +19,18 @@ namespace
         for (auto menuNum = 0; menuNum < menuList->menuCount; menuNum++)
         {
             const auto* menu = menuList->menus[menuNum];
-            if (!menu || !menu->window.name)
+            if (!menu)
                 continue;
 
-            // A menu of another fastfile has no data to write, so keep the reference format for it. Only OAT's own
-            // linker understands it, but the native one could not include a menu it has no source for either way.
-            if (menu->window.name[0] == ',')
-            {
-                const auto menuDumpingState = zoneState->m_menu_dumping_state_map.find(menu);
-                if (menuDumpingState != zoneState->m_menu_dumping_state_map.end())
-                    menuDumper.IncludeMenu(menuDumpingState->second.m_path);
+            const auto menuDumpingState = zoneState->m_menu_dumping_state_map.find(menu);
+            if (menuDumpingState == zoneState->m_menu_dumping_state_map.end())
                 continue;
-            }
 
-            // Every member menu is written into the list file itself: the native linker's menu parser knows only
-            // menuDef and assetGlobalDef at file scope, so a list of loadMenu references would not compile.
-            menuDumper.WriteMenu(*menu);
+            // If the menu was embedded directly as menu list write its data in the menu list file
+            if (menuDumpingState->second.m_alias_menu_list == menuList)
+                menuDumper.WriteMenu(*menu);
+            else
+                menuDumper.IncludeMenu(menuDumpingState->second.m_path);
         }
     }
 
