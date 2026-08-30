@@ -31,7 +31,7 @@ namespace image::tga_writer
 
         CHECK(writer.SupportsImageFormat(&format::B8_G8_R8));
         CHECK(writer.SupportsImageFormat(&format::R8));
-        CHECK_FALSE(writer.SupportsImageFormat(&format::B8_G8_R8_A8));
+        CHECK(writer.SupportsImageFormat(&format::B8_G8_R8_A8));
         CHECK_FALSE(writer.SupportsImageFormat(&format::BC3));
     }
 

@@ -76,15 +76,20 @@ namespace
         menuDumper.Dump(dumpingContext);
 
         const auto* dumpedMenuList = dumpOutput.GetMockedFile("ui_mp/menus.txt");
-        const auto* dumpedMainMenu = dumpOutput.GetMockedFile("ui_mp/main.menu");
-        const auto* dumpedPopupMenu = dumpOutput.GetMockedFile("ui_mp/popup.menu");
         REQUIRE(dumpedMenuList);
-        REQUIRE(dumpedMainMenu);
-        REQUIRE(dumpedPopupMenu);
-        REQUIRE(dumpedMenuList->AsString().find("loadMenu { \"ui_mp/main.menu\" }") != std::string::npos);
-        REQUIRE(dumpedMenuList->AsString().find("loadMenu { \"ui_mp/popup.menu\" }") != std::string::npos);
-        REQUIRE(dumpedMainMenu->AsString().find("text                        \"\"") != std::string::npos);
-        REQUIRE(dumpedMainMenu->AsString().find("visible                     when(dvarbool(\"ui_show_main\"));") != std::string::npos);
-        REQUIRE(dumpedMainMenu->AsString().find("setItemColor empty_text borderColor 0.1 0.1 0.12 0.5;") != std::string::npos);
+
+        // Both menus are members of the list, so they are written into the list file itself and get no file of their
+        // own: the native linker's menu parser knows only menuDef and assetGlobalDef at file scope, so a list of
+        // loadMenu references would not compile.
+        REQUIRE(dumpOutput.GetMockedFile("ui_mp/main.menu") == nullptr);
+        REQUIRE(dumpOutput.GetMockedFile("ui_mp/popup.menu") == nullptr);
+
+        const auto dumpedMenuListContents = dumpedMenuList->AsString();
+        REQUIRE(dumpedMenuListContents.find("loadMenu") == std::string::npos);
+        REQUIRE(dumpedMenuListContents.find("name                        \"main\"") != std::string::npos);
+        REQUIRE(dumpedMenuListContents.find("name                        \"popup\"") != std::string::npos);
+        REQUIRE(dumpedMenuListContents.find("text                        \"\"") != std::string::npos);
+        REQUIRE(dumpedMenuListContents.find("visible                     when(dvarbool(\"ui_show_main\"));") != std::string::npos);
+        REQUIRE(dumpedMenuListContents.find("setItemColor empty_text borderColor 0.1 0.1 0.12 0.5;") != std::string::npos);
     }
 } // namespace

@@ -53,7 +53,7 @@ namespace image
         if (imageType == 0u)
             return;
 
-        // Both supported formats are unsigned and store their channels in the order and size a tga file does, so the
+        // Every supported format is unsigned and stores its channels in the order and size a tga file does, so the
         // pixel data goes out unchanged
         const auto* unsignedFormat = dynamic_cast<const ImageFormatUnsigned*>(format);
 
