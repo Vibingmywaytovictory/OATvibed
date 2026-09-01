@@ -41,7 +41,7 @@ void ObjWriter::RegisterAssetDumpers(AssetDumpingContext& context)
 #endif
         ));
     RegisterAssetDumper(std::make_unique<image::DumperIW3>());
-    RegisterAssetDumper(std::make_unique<sound::AliasDumperIW3>());
+    RegisterAssetDumper(std::make_unique<sound_alias::DumperIW3>());
     RegisterAssetDumper(std::make_unique<sound_curve::DumperIW3>());
     RegisterAssetDumper(std::make_unique<sound::LoadedSoundDumperIW3>());
     // REGISTER_DUMPER(AssetDumperClipMap)

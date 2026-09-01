@@ -1,91 +1,162 @@
 #include "Game/IW3/Sound/SoundAliasDumperIW3.h"
 
+#include "Csv/CsvStream.h"
+#include "Game/IW3/SoundConstantsIW3.h"
 #include "SearchPath/MockOutputPath.h"
 #include "SearchPath/MockSearchPath.h"
 
 #include <catch2/catch_test_macros.hpp>
 #include <memory>
+#include <sstream>
+#include <string>
+#include <vector>
 
 using namespace IW3;
 
 namespace
 {
-    TEST_CASE("SoundAliasDumperIW3: Dumps a soundaliases csv the native linker accepts", "[iw3][sound][assetdumper]")
+    TEST_CASE("SoundAliasDumperIW3: Dumps SDK-compatible sound alias rows", "[iw3][sound-alias][assetdumper]")
     {
         LoadedSound loadedSound{};
-        loadedSound.name = "weapons/ak47_fire.wav";
+        loadedSound.name = "weapons/test_loaded.wav";
 
-        SoundFile loadedFile{};
-        loadedFile.type = SAT_LOADED;
-        loadedFile.exists = 1;
-        loadedFile.u.loadSnd = &loadedSound;
+        SoundFile soundFiles[2]{};
+        soundFiles[0].type = SAT_LOADED;
+        soundFiles[0].exists = true;
+        soundFiles[0].u.loadSnd = &loadedSound;
+        soundFiles[1].type = SAT_STREAMED;
+        soundFiles[1].exists = true;
+        soundFiles[1].u.streamSnd.dir = "music";
+        soundFiles[1].u.streamSnd.name = "test_streamed.mp3";
 
-        SoundFile streamedFile{};
-        streamedFile.type = SAT_STREAMED;
-        streamedFile.exists = 1;
-        streamedFile.u.streamSnd = {"music", "mission_theme.mp3"};
+        SndCurve customCurve{};
+        customCurve.filename = "weapon1";
 
-        SndCurve curve{};
-        curve.filename = "weapon2";
+        SpeakerMap defaultSpeakerMap{};
+        defaultSpeakerMap.isDefault = true;
+        defaultSpeakerMap.name = "default";
 
-        // channel 18 (weapon), loaded type, slave, nowetlevel
-        snd_alias_t fireVariant1{};
-        fireVariant1.aliasName = "weap_ak47_fire";
-        fireVariant1.soundFile = &loadedFile;
-        fireVariant1.volMin = 0.85f;
-        fireVariant1.volMax = 0.9f;
-        fireVariant1.pitchMin = 0.95f;
-        fireVariant1.pitchMax = 1.05f;
-        fireVariant1.distMin = 10.0f;
-        fireVariant1.distMax = 1500.0f;
-        fireVariant1.flags = (18 << 8) | (SAT_LOADED << 6) | (1 << 4) | (1 << 2);
-        fireVariant1.slavePercentage = 0.85f;
-        fireVariant1.probability = 0.5f;
-        fireVariant1.volumeFalloffCurve = &curve;
+        SpeakerMap customSpeakerMap{};
+        customSpeakerMap.name = "music";
+        for (auto sourceMode = 0; sourceMode < 2; sourceMode++)
+        {
+            for (auto outputMode = 0; outputMode < 2; outputMode++)
+            {
+                auto& channelMap = customSpeakerMap.channelMaps[sourceMode][outputMode];
+                channelMap.speakerCount = outputMode == 0 ? 2 : 6;
+                for (auto outputChannel = 0; outputChannel < channelMap.speakerCount; outputChannel++)
+                {
+                    auto& speaker = channelMap.speakers[outputChannel];
+                    speaker.speaker = outputChannel;
+                    speaker.numLevels = sourceMode + 1;
+                    for (auto inputChannel = 0; inputChannel <= sourceMode; inputChannel++)
+                        speaker.levels[inputChannel] = 0.1f * static_cast<float>(1 + sourceMode + outputMode + outputChannel + inputChannel);
+                }
+            }
+        }
 
-        auto fireVariant2 = fireVariant1;
-        fireVariant2.probability = 0.0f;
+        snd_alias_t aliases[2]{};
+        aliases[0].aliasName = "test_alias";
+        aliases[0].subtitle = "A subtitle, with a comma";
+        aliases[0].secondaryAliasName = "secondary_alias";
+        aliases[0].chainAliasName = "chain_alias";
+        aliases[0].soundFile = &soundFiles[0];
+        aliases[0].volMin = 0.25f;
+        aliases[0].volMax = 0.75f;
+        aliases[0].pitchMin = 0.9f;
+        aliases[0].pitchMax = 1.1f;
+        aliases[0].distMin = 64.0f;
+        aliases[0].distMax = 512.0f;
+        aliases[0].flags = (18 << SND_ALIAS_FLAG_CHANNEL_SHIFT) | (SAT_LOADED << SND_ALIAS_FLAG_TYPE_SHIFT) | SND_ALIAS_FLAG_LOOPING | SND_ALIAS_FLAG_MASTER
+                           | SND_ALIAS_FLAG_FULL_DRY_LEVEL | SND_ALIAS_FLAG_NO_WET_LEVEL;
+        aliases[0].slavePercentage = 1.0f;
+        aliases[0].probability = 0.8f;
+        aliases[0].lfePercentage = 0.2f;
+        aliases[0].centerPercentage = 0.3f;
+        aliases[0].startDelay = 25;
+        aliases[0].volumeFalloffCurve = &customCurve;
+        aliases[0].envelopMin = 0.1f;
+        aliases[0].envelopMax = 0.9f;
+        aliases[0].envelopPercentage = 0.4f;
+        aliases[0].speakerMap = &defaultSpeakerMap;
 
-        snd_alias_t variants[]{fireVariant1, fireVariant2};
-        snd_alias_list_t fireList{"weap_ak47_fire", variants, 2};
+        aliases[1].aliasName = "test_alias";
+        aliases[1].soundFile = &soundFiles[1];
+        aliases[1].volMin = 1.0f;
+        aliases[1].volMax = 1.0f;
+        aliases[1].pitchMin = 1.0f;
+        aliases[1].pitchMax = 1.0f;
+        aliases[1].distMin = 120.0f;
+        aliases[1].distMax = 600.0f;
+        aliases[1].flags = (10 << SND_ALIAS_FLAG_CHANNEL_SHIFT) | (SAT_STREAMED << SND_ALIAS_FLAG_TYPE_SHIFT) | SND_ALIAS_FLAG_LOOPING | SND_ALIAS_FLAG_SLAVE
+                           | SND_ALIAS_FLAG_RANDOM_LOOPING;
+        aliases[1].slavePercentage = 0.5f;
+        aliases[1].probability = 1.0f;
+        aliases[1].speakerMap = &customSpeakerMap;
 
-        // channel 28 (music), streamed, looping, master, fulldrylevel
-        snd_alias_t musicAlias{};
-        musicAlias.aliasName = "mission_music";
-        musicAlias.subtitle = "subtitle, with comma";
-        musicAlias.soundFile = &streamedFile;
-        musicAlias.volMin = 1.0f;
-        musicAlias.volMax = 1.0f;
-        musicAlias.pitchMin = 1.0f;
-        musicAlias.pitchMax = 1.0f;
-        musicAlias.distMin = 120.0f;
-        musicAlias.distMax = 1250.0f;
-        musicAlias.flags = (28 << 8) | (SAT_STREAMED << 6) | (1 << 3) | (1 << 1) | (1 << 0);
-        musicAlias.startDelay = 500;
+        snd_alias_list_t aliasList{};
+        aliasList.aliasName = "test_alias";
+        aliasList.head = aliases;
+        aliasList.count = 2;
 
-        snd_alias_list_t musicList{"mission_music", &musicAlias, 1};
-
-        Zone zone("MockZone", 0, GameId::IW3, GamePlatform::PC);
-        zone.m_pools.AddAsset(std::make_unique<XAssetInfo<snd_alias_list_t>>(ASSET_TYPE_SOUND, fireList.aliasName, &fireList));
-        zone.m_pools.AddAsset(std::make_unique<XAssetInfo<snd_alias_list_t>>(ASSET_TYPE_SOUND, musicList.aliasName, &musicList));
+        Zone zone("DumpingZone", 0, GameId::IW3, GamePlatform::PC);
+        zone.m_pools.AddAsset(std::make_unique<XAssetInfo<snd_alias_list_t>>(ASSET_TYPE_SOUND, aliasList.aliasName, &aliasList));
 
         MockSearchPath mockObjPath;
         MockOutputPath mockOutput;
         AssetDumpingContext context(zone, "", mockOutput, mockObjPath, std::nullopt);
 
-        sound::AliasDumperIW3 dumper;
+        sound_alias::DumperIW3 dumper;
         dumper.Dump(context);
 
-        const auto* file = mockOutput.GetMockedFile("soundaliases/MockZone.csv");
-        REQUIRE(file);
+        const auto* file = mockOutput.GetMockedFile("soundaliases/DumpingZone.csv");
+        REQUIRE(file != nullptr);
 
-        constexpr auto expectedOutput =
-            R"(# Dumped from fastfile "MockZone".
-name,sequence,file,vol_min,vol_max,vol_mod,pitch_min,pitch_max,dist_min,dist_max,channel,type,probability,loop,masterslave,loadspec,subtitle,compression,secondaryaliasname,volumefalloffcurve,startdelay,speakermap,reverb,lfe percentage,center percentage,platform,envelop_min,envelop_max,envelop percentage,conversion
-weap_ak47_fire,1,weapons/ak47_fire.wav,0.85,0.9,,0.95,1.05,10,1500,weapon,loaded,0.5,nonlooping,0.85,,,,,weapon2,,,nowetlevel,,,,,,,
-weap_ak47_fire,2,weapons/ak47_fire.wav,0.85,0.9,,0.95,1.05,10,1500,weapon,loaded,,nonlooping,0.85,,,,,weapon2,,,nowetlevel,,,,,,,
-mission_music,,music/mission_theme.mp3,1,1,,1,1,120,1250,music,streamed,,looping,master,,"subtitle, with comma",,,,500,,fulldrylevel,,,,,,,
-)";
-        REQUIRE(file->AsString() == expectedOutput);
+        std::istringstream input(file->AsString());
+        CsvInputStream csv(input);
+        std::vector<std::string> row;
+
+        REQUIRE(csv.NextRow(row));
+        REQUIRE(row.size() == 30);
+        REQUIRE(row[0] == "name");
+        REQUIRE(row[29] == "chainaliasname");
+
+        REQUIRE(csv.NextRow(row));
+        REQUIRE(row.size() == 30);
+        REQUIRE(row[0] == "test_alias");
+        REQUIRE(row[1] == "0");
+        REQUIRE(row[2] == "weapons/test_loaded.wav");
+        REQUIRE(row[3] == "0.25");
+        REQUIRE(row[4] == "0.75");
+        REQUIRE(row[5].empty());
+        REQUIRE(row[10] == "weapon");
+        REQUIRE(row[11] == "loaded");
+        REQUIRE(row[13] == "looping");
+        REQUIRE(row[14] == "master");
+        REQUIRE(row[16] == "A subtitle, with a comma");
+        REQUIRE(row[18] == "secondary_alias");
+        REQUIRE(row[19] == "weapon1");
+        REQUIRE(row[20] == "25");
+        REQUIRE(row[21].empty());
+        REQUIRE(row[22] == "fulldrylevel nowetlevel");
+        REQUIRE(row[29] == "chain_alias");
+
+        REQUIRE(csv.NextRow(row));
+        REQUIRE(row.size() == 30);
+        REQUIRE(row[0] == "test_alias");
+        REQUIRE(row[1] == "1");
+        REQUIRE(row[2] == "music/test_streamed.mp3");
+        REQUIRE(row[10] == "menu");
+        REQUIRE(row[11] == "streamed");
+        REQUIRE(row[13] == "rlooping");
+        REQUIRE(row[14] == "0.5");
+        REQUIRE(row[21] == "music");
+        REQUIRE_FALSE(csv.NextRow(row));
+
+        const auto* speakerMapFile = mockOutput.GetMockedFile("soundaliases/music.spkrmap");
+        REQUIRE(speakerMapFile != nullptr);
+        REQUIRE(speakerMapFile->AsString().starts_with("SPKRMAP\n\nMONOSOURCE LEFTSPEAKER 0.1000\n"));
+        REQUIRE(speakerMapFile->AsString().find("RIGHTSOURCE RIGHTSURROUNDSPEAKER 0.9000\n") != std::string::npos);
+        REQUIRE(mockOutput.GetMockedFile("soundaliases/default.spkrmap") == nullptr);
     }
 } // namespace
