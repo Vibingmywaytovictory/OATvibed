@@ -554,21 +554,25 @@ namespace
         itemDef
         {
             rect                        1 2 3 4 0 0
+            borderSize                  0
             exp text                    (localvarstring("ui_highlight"));
         }
         itemDef
         {
             rect                        1 2 3 4 0 0
+            borderSize                  0
             exp text                    (2);
         }
         itemDef
         {
             rect                        1 2 3 4 0 0
+            borderSize                  0
             exp text                    (3 + 7);
         }
         itemDef
         {
             rect                        1 2 3 4 0 0
+            borderSize                  0
             exp text                    (-3 + 7 * !sin(cos(7)));
         }
     }
