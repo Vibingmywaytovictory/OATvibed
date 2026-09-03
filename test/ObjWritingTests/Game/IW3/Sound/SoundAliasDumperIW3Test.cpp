@@ -124,7 +124,7 @@ namespace
         REQUIRE(csv.NextRow(row));
         REQUIRE(row.size() == 30);
         REQUIRE(row[0] == "test_alias");
-        REQUIRE(row[1] == "0");
+        REQUIRE(row[1] == "1");
         REQUIRE(row[2] == "weapons/test_loaded.wav");
         REQUIRE(row[3] == "0.25");
         REQUIRE(row[4] == "0.75");
@@ -144,7 +144,7 @@ namespace
         REQUIRE(csv.NextRow(row));
         REQUIRE(row.size() == 30);
         REQUIRE(row[0] == "test_alias");
-        REQUIRE(row[1] == "1");
+        REQUIRE(row[1] == "2");
         REQUIRE(row[2] == "music/test_streamed.mp3");
         REQUIRE(row[10] == "menu");
         REQUIRE(row[11] == "streamed");
@@ -158,5 +158,68 @@ namespace
         REQUIRE(speakerMapFile->AsString().starts_with("SPKRMAP\n\nMONOSOURCE LEFTSPEAKER 0.1000\n"));
         REQUIRE(speakerMapFile->AsString().find("RIGHTSOURCE RIGHTSURROUNDSPEAKER 0.9000\n") != std::string::npos);
         REQUIRE(mockOutput.GetMockedFile("soundaliases/default.spkrmap") == nullptr);
+    }
+
+    TEST_CASE("SoundAliasDumperIW3: Writes values the native csv parser can read back", "[iw3][sound-alias][assetdumper]")
+    {
+        LoadedSound loadedSound{};
+        loadedSound.name = "weapons/lone_alias.wav";
+
+        SoundFile soundFile{};
+        soundFile.type = SAT_LOADED;
+        soundFile.exists = true;
+        soundFile.u.loadSnd = &loadedSound;
+
+        snd_alias_t alias{};
+        alias.aliasName = "lone_alias";
+        alias.soundFile = &soundFile;
+        alias.volMin = 1.0f;
+        alias.volMax = 1.0f;
+        // Small enough that the default float formatting would reach for scientific notation
+        alias.pitchMin = 0.0000021f;
+        alias.pitchMax = 1.0f;
+        alias.flags = (18 << SND_ALIAS_FLAG_CHANNEL_SHIFT) | (SAT_LOADED << SND_ALIAS_FLAG_TYPE_SHIFT);
+
+        snd_alias_list_t aliasList{};
+        aliasList.aliasName = "lone_alias";
+        aliasList.head = &alias;
+        aliasList.count = 1;
+
+        Zone zone("DumpingZone", 0, GameId::IW3, GamePlatform::PC);
+        zone.m_pools.AddAsset(std::make_unique<XAssetInfo<snd_alias_list_t>>(ASSET_TYPE_SOUND, aliasList.aliasName, &aliasList));
+
+        MockSearchPath mockObjPath;
+        MockOutputPath mockOutput;
+        AssetDumpingContext context(zone, "", mockOutput, mockObjPath, std::nullopt);
+
+        sound_alias::DumperIW3 dumper;
+        dumper.Dump(context);
+
+        const auto* file = mockOutput.GetMockedFile("soundaliases/DumpingZone.csv");
+        REQUIRE(file != nullptr);
+
+        std::istringstream input(file->AsString());
+        CsvInputStream csv(input);
+        std::vector<std::string> row;
+
+        REQUIRE(csv.NextRow(row));
+        REQUIRE(csv.NextRow(row));
+        REQUIRE(row.size() == 30);
+
+        // An alias with no variants leaves the sequence empty, the way the stock files do
+        REQUIRE(row[1].empty());
+
+        // The native parser stops at the 'e' of an exponent, so the value has to be written out in full
+        REQUIRE(row[6].find('e') == std::string::npos);
+        REQUIRE(row[6] == "0.0000021");
+
+        // Columns the stock files leave empty rather than writing a zero into
+        REQUIRE(row[12].empty()); // probability
+        REQUIRE(row[20].empty()); // startdelay
+        REQUIRE(row[23].empty()); // lfe percentage
+        REQUIRE(row[24].empty()); // center percentage
+        REQUIRE(row[26].empty()); // envelop_min
+        REQUIRE(row[27].empty()); // envelop_max
+        REQUIRE(row[28].empty()); // envelop percentage
     }
 } // namespace

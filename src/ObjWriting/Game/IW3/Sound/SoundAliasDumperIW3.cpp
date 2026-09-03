@@ -21,9 +21,32 @@ namespace
         csv.NextRow();
     }
 
+    std::string FloatValue(const float value)
+    {
+        auto result = std::format("{}", value);
+
+        // The native csv parser does not read scientific notation
+        if (result.find('e') != std::string::npos)
+        {
+            result = std::format("{:.8f}", value);
+            const auto lastNonZero = result.find_last_not_of('0');
+            result.erase(result[lastNonZero] == '.' ? lastNonZero : lastNonZero + 1);
+        }
+
+        return result;
+    }
+
     void WriteFloat(CsvOutputStream& csv, const float value)
     {
-        csv.WriteColumn(std::format("{}", value));
+        csv.WriteColumn(FloatValue(value));
+    }
+
+    // The stock csv files leave these columns empty rather than writing a zero, and the compiler resolves an
+    // empty one back to the same value. Writing the zero out would still compile, but the dumped file would no
+    // longer look like a hand written one.
+    void WriteOptionalFloat(CsvOutputStream& csv, const float value)
+    {
+        csv.WriteColumn(value != 0.0f ? FloatValue(value) : "");
     }
 
     std::string GetSoundFileName(const SoundFile* soundFile)
@@ -84,7 +107,7 @@ namespace
         if (alias.flags & SND_ALIAS_FLAG_MASTER)
             return "master";
         if (alias.flags & SND_ALIAS_FLAG_SLAVE)
-            return std::format("{}", alias.slavePercentage);
+            return FloatValue(alias.slavePercentage);
 
         return {};
     }
@@ -173,7 +196,7 @@ namespace
         // Keep this sequence synchronized with SOUND_ALIAS_HEADERS. Each marker identifies
         // the corresponding stock parser field, including fields reordered by the SDK CSV.
         csv.WriteColumn(aliasName ? aliasName : "");             // SA_NAME
-        csv.WriteColumn(std::format("{}", sequence));            // SA_SEQUENCE
+        csv.WriteColumn(sequence != 0 ? std::format("{}", sequence) : "");        // SA_SEQUENCE
         csv.WriteColumn(GetSoundFileName(alias.soundFile));      // SA_FILE
         WriteFloat(csv, alias.volMin);                           // SA_VOL_MIN
         WriteFloat(csv, alias.volMax);                           // SA_VOL_MAX
@@ -184,7 +207,7 @@ namespace
         WriteFloat(csv, alias.distMax);                          // SA_DIST_MAX
         csv.WriteColumn(GetChannelName(alias.flags, aliasName)); // SA_CHANNEL
         csv.WriteColumn(GetSoundTypeName(alias));                // SA_TYPE
-        WriteFloat(csv, alias.probability);                      // SA_PROBABILITY
+        WriteOptionalFloat(csv, alias.probability);              // SA_PROBABILITY
         csv.WriteColumn(GetLoopingName(alias.flags));            // SA_LOOP
         csv.WriteColumn(GetMasterSlaveValue(alias));             // SA_MASTERSLAVE
         csv.WriteColumn("");                                     // SA_LOADSPEC: source-file filter not stored in the asset.
@@ -192,15 +215,15 @@ namespace
         csv.WriteColumn("");                                     // Source-only compression column: applied to the sound file, not stored in the alias.
         csv.WriteColumn(alias.secondaryAliasName ? alias.secondaryAliasName : "");                                                 // SA_SECONDARYALIASNAME
         csv.WriteColumn(alias.volumeFalloffCurve && alias.volumeFalloffCurve->filename ? alias.volumeFalloffCurve->filename : ""); // SA_VOLUMEFALLOFFCURVE
-        csv.WriteColumn(std::format("{}", alias.startDelay));                                                                      // SA_STARTDELAY
+        csv.WriteColumn(alias.startDelay != 0 ? std::format("{}", alias.startDelay) : "");                                         // SA_STARTDELAY
         csv.WriteColumn(alias.speakerMap && !alias.speakerMap->isDefault && alias.speakerMap->name ? alias.speakerMap->name : ""); // SA_SPEAKERMAP
         csv.WriteColumn(GetReverbValue(alias.flags));                                                                              // SA_REVERB
-        WriteFloat(csv, alias.lfePercentage);                                                                                      // SA_LFEPERCENTAGE
-        WriteFloat(csv, alias.centerPercentage);                                                                                   // SA_CENTERPERCENTAGE
+        WriteOptionalFloat(csv, alias.lfePercentage);                                                                              // SA_LFEPERCENTAGE
+        WriteOptionalFloat(csv, alias.centerPercentage);                                                                           // SA_CENTERPERCENTAGE
         csv.WriteColumn("");                                               // Source-only platform filter not stored in the asset.
-        WriteFloat(csv, alias.envelopMin);                                 // SA_ENVELOPMIN
-        WriteFloat(csv, alias.envelopMax);                                 // SA_ENVELOPMAX
-        WriteFloat(csv, alias.envelopPercentage);                          // SA_ENVELOPPERCENTAGE
+        WriteOptionalFloat(csv, alias.envelopMin);                         // SA_ENVELOPMIN
+        WriteOptionalFloat(csv, alias.envelopMax);                         // SA_ENVELOPMAX
+        WriteOptionalFloat(csv, alias.envelopPercentage);                  // SA_ENVELOPPERCENTAGE
         csv.WriteColumn(alias.chainAliasName ? alias.chainAliasName : ""); // SA_CHAINALIASNAME
         csv.NextRow();
     }
@@ -235,9 +258,16 @@ namespace sound_alias
             if (!aliasList || aliasList->count <= 0 || !aliasList->head)
                 continue;
 
-            for (auto sequence = 0; sequence < aliasList->count; sequence++)
+            for (auto aliasIndex = 0; aliasIndex < aliasList->count; aliasIndex++)
             {
-                const auto& alias = aliasList->head[sequence];
+                const auto& alias = aliasList->head[aliasIndex];
+
+                // The compiled asset does not retain the csv sequence value, but the linker refuses same-named
+                // rows without distinct sequences, so number the variants 1..n the way the stock files do. A
+                // single alias keeps the column empty, again matching them.
+                const auto sequence = alias.sequence != 0 ? alias.sequence
+                                      : aliasList->count > 1 ? aliasIndex + 1
+                                                             : 0;
                 WriteAlias(csv, alias, aliasList->aliasName, sequence);
 
                 const auto* speakerMap = alias.speakerMap;
